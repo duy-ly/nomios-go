@@ -10,20 +10,23 @@ import (
 type Consumer struct {
 	mu          sync.Mutex
 	bufferSize  int
+	flushTick   time.Duration
 	bufferQueue []event.NomiosEvent
 	flushSig    chan bool
+	stopSig     chan bool
 	publisher   *Publisher
 
 	// state
 	lastProcessedEvent *event.NomiosEvent
 }
 
-func NewConsumer(partition int) *Consumer {
+func NewConsumer(partition int, bufferSize int, flushTick time.Duration) *Consumer {
 	c := new(Consumer)
-	c.bufferSize = 100
+	c.bufferSize = bufferSize
+	c.flushTick = flushTick
 	c.bufferQueue = make([]event.NomiosEvent, c.bufferSize)
 	c.flushSig = make(chan bool, 1)
-
+	c.stopSig = make(chan bool, 1)
 	c.publisher = NewPublisher()
 
 	return c
@@ -31,10 +34,13 @@ func NewConsumer(partition int) *Consumer {
 
 func (c *Consumer) Start() {
 	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond)
+		ticker := time.NewTicker(c.flushTick)
+		defer ticker.Stop()
 
 		for {
 			select {
+			case <-c.stopSig:
+				break
 			case <-ticker.C:
 				c.handle()
 			case <-c.flushSig:
@@ -53,7 +59,7 @@ func (c *Consumer) Send(e event.NomiosEvent) {
 	defer c.mu.Unlock()
 
 	c.bufferQueue = append(c.bufferQueue, e)
-	if len(c.bufferQueue) == c.bufferSize {
+	if len(c.bufferQueue) >= c.bufferSize {
 		c.flushSig <- true
 	}
 }
@@ -72,4 +78,9 @@ func (c *Consumer) handle() error {
 	c.lastProcessedEvent = &tmp[len(tmp)-1]
 
 	return nil
+}
+
+func (c *Consumer) Stop() {
+	c.stopSig <- true
+	c.handle()
 }

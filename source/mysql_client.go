@@ -73,3 +73,7 @@ func (s *Source) Start(binlogFile string, binlogPos uint32, stream chan event.No
 		}
 	}()
 }
+
+func (s *Source) Stop() {
+	s.stopSig <- true
+}

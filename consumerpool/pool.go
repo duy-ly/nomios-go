@@ -1,20 +1,38 @@
 package consumerpool
 
-import "github.com/duy-ly/nomios-go/event"
+import (
+	"sync"
+	"time"
+
+	"github.com/duy-ly/nomios-go/event"
+)
 
 type ConsumerPool struct {
+	cfg     PoolConfig
 	stopSig chan bool
+	flushed chan bool
 
 	consumers []*Consumer
 }
 
 // NewConsumerPool -- create a pool of consumer
-func NewConsumerPool(count int) *ConsumerPool {
-	p := new(ConsumerPool)
-	p.stopSig = make(chan bool)
+func NewConsumerPool(cfg PoolConfig) *ConsumerPool {
+	if cfg.Count <= 0 {
+		cfg.Count = 1
+	}
+	if cfg.BufferSize <= 0 {
+		cfg.BufferSize = 100
+	}
+	if cfg.FlushTick <= 0 {
+		cfg.FlushTick = 100 * time.Millisecond
+	}
 
-	for i := 0; i <= count; i++ {
-		c := NewConsumer(i)
+	p := new(ConsumerPool)
+	p.stopSig = make(chan bool, 1)
+	p.flushed = make(chan bool, 1)
+
+	for i := 0; i <= cfg.Count; i++ {
+		c := NewConsumer(i, cfg.BufferSize, cfg.FlushTick)
 
 		c.Start()
 
@@ -30,13 +48,38 @@ func (p *ConsumerPool) Start(stream chan event.NomiosEvent) {
 		for {
 			select {
 			case <-p.stopSig:
+				// ensure get all event from stream
+				for e := range stream {
+					p.partitionEvent(e)
+				}
+
+				p.flushed <- true
 				break
 			case e := <-stream:
-				// TODO: do partition
-				partitionIdx := 1
-
-				p.consumers[partitionIdx].Send(e)
+				p.partitionEvent(e)
 			}
 		}
 	}()
+}
+
+func (p *ConsumerPool) partitionEvent(e event.NomiosEvent) {
+	// TODO: do partition
+	partitionIdx := 1
+
+	p.consumers[partitionIdx].Send(e)
+}
+
+func (p *ConsumerPool) Stop() {
+	p.stopSig <- true
+	<-p.flushed
+
+	var wg sync.WaitGroup
+	for _, c := range p.consumers {
+		wg.Add(1)
+		go func(c *Consumer) {
+			defer wg.Done()
+			c.Stop()
+		}(c)
+	}
+	wg.Wait()
 }
