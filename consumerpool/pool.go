@@ -31,7 +31,7 @@ func NewConsumerPool(cfg PoolConfig) *ConsumerPool {
 	p.stopSig = make(chan bool, 1)
 	p.flushed = make(chan bool, 1)
 
-	for i := 0; i <= cfg.Count; i++ {
+	for i := 0; i < cfg.Count; i++ {
 		c := NewConsumer(i, cfg.BufferSize, cfg.FlushTick)
 
 		c.Start()
@@ -54,7 +54,7 @@ func (p *ConsumerPool) Start(stream chan event.NomiosEvent) {
 				}
 
 				p.flushed <- true
-				break
+				return
 			case e := <-stream:
 				p.partitionEvent(e)
 			}
@@ -66,7 +66,7 @@ func (p *ConsumerPool) partitionEvent(e event.NomiosEvent) {
 	// TODO: do partition
 	partitionIdx := 1
 
-	p.consumers[partitionIdx].Send(e)
+	p.consumers[partitionIdx].Send(&e)
 }
 
 func (p *ConsumerPool) Stop() {

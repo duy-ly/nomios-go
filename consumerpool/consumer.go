@@ -9,9 +9,10 @@ import (
 
 type Consumer struct {
 	mu          sync.Mutex
+	partition   int
 	bufferSize  int
 	flushTick   time.Duration
-	bufferQueue []event.NomiosEvent
+	bufferQueue []*event.NomiosEvent
 	flushSig    chan bool
 	stopSig     chan bool
 	publisher   *Publisher
@@ -22,9 +23,10 @@ type Consumer struct {
 
 func NewConsumer(partition int, bufferSize int, flushTick time.Duration) *Consumer {
 	c := new(Consumer)
+	c.partition = partition
 	c.bufferSize = bufferSize
 	c.flushTick = flushTick
-	c.bufferQueue = make([]event.NomiosEvent, c.bufferSize)
+	c.bufferQueue = make([]*event.NomiosEvent, 0)
 	c.flushSig = make(chan bool, 1)
 	c.stopSig = make(chan bool, 1)
 	c.publisher = NewPublisher()
@@ -35,12 +37,12 @@ func NewConsumer(partition int, bufferSize int, flushTick time.Duration) *Consum
 func (c *Consumer) Start() {
 	go func() {
 		ticker := time.NewTicker(c.flushTick)
-		defer ticker.Stop()
 
 		for {
 			select {
 			case <-c.stopSig:
-				break
+				ticker.Stop()
+				return
 			case <-ticker.C:
 				c.handle()
 			case <-c.flushSig:
@@ -54,7 +56,7 @@ func (c *Consumer) GetLastProcessedEvent() *event.NomiosEvent {
 	return c.lastProcessedEvent
 }
 
-func (c *Consumer) Send(e event.NomiosEvent) {
+func (c *Consumer) Send(e *event.NomiosEvent) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -65,17 +67,21 @@ func (c *Consumer) Send(e event.NomiosEvent) {
 }
 
 func (c *Consumer) handle() error {
+	if len(c.bufferQueue) == 0 {
+		return nil
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	tmp := make([]event.NomiosEvent, c.bufferSize)
+	tmp := make([]*event.NomiosEvent, 0)
 	tmp, c.bufferQueue = c.bufferQueue, tmp
 
 	err := c.publisher.Publish(tmp)
 	if err != nil {
 		return err
 	}
-	c.lastProcessedEvent = &tmp[len(tmp)-1]
+	c.lastProcessedEvent = tmp[len(tmp)-1]
 
 	return nil
 }

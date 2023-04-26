@@ -21,10 +21,9 @@ type SourceConfig struct {
 
 type Source struct {
 	stopSig chan bool
+	syncer  *replication.BinlogSyncer
 
 	mapper SourceEventMapper
-
-	syncer *replication.BinlogSyncer
 }
 
 // NewSource -- create new source from config
@@ -43,21 +42,26 @@ func NewSource(cfg SourceConfig) (*Source, error) {
 	s.stopSig = make(chan bool, 1)
 	s.syncer = replication.NewBinlogSyncer(bsCfg)
 
+	s.mapper = NewSourceEventMapper()
+
 	return s, nil
 }
 
 // Start -- start sync from mysql then mapping BinlogEvent to NomiosEvent
 func (s *Source) Start(binlogFile string, binlogPos uint32, stream chan event.NomiosEvent) {
 	go func() {
-		binlogStreamer, _ := s.syncer.StartSync(mysql.Position{
+		binlogStreamer, err := s.syncer.StartSync(mysql.Position{
 			Name: binlogFile,
 			Pos:  binlogPos,
 		})
+		if err != nil {
+			panic(err)
+		}
 
 		for {
 			select {
 			case <-s.stopSig:
-				break
+				return
 			default:
 				binlogEvent, err := binlogStreamer.GetEvent(context.Background())
 				if err != nil {

@@ -73,10 +73,15 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, syscall.SIGTERM)
-	go func() {
-		<-c
-		fmt.Println("Nomios start graceful terminate")
-		h.Stop()
-		fmt.Println("Nomios is graceful terminated")
-	}()
+
+	for {
+		select {
+		case <-c:
+			fmt.Println("Nomios start graceful terminate")
+			h.Stop()
+			fmt.Println("Nomios is graceful terminated")
+			return
+		default:
+		}
+	}
 }

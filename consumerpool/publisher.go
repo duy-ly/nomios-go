@@ -11,7 +11,7 @@ func NewPublisher() *Publisher {
 	return p
 }
 
-func (p *Publisher) Publish(msg []event.NomiosEvent) error {
+func (p *Publisher) Publish(msg []*event.NomiosEvent) error {
 	// TODO
 
 	return nil
