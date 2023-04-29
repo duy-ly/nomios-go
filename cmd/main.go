@@ -26,10 +26,10 @@ var (
 )
 
 func init() {
-	flag.StringVar(&dbHost, "db-host", "127.0.0.1", "")
+	flag.StringVar(&dbHost, "db-host", "mysql", "")
 	flag.IntVar(&dbPort, "db-port", 3306, "")
-	flag.StringVar(&dbUser, "db-user", "", "")
-	flag.StringVar(&dbPass, "db-pass", "", "")
+	flag.StringVar(&dbUser, "db-user", "nomios", "")
+	flag.StringVar(&dbPass, "db-pass", "nomiospass", "")
 	flag.IntVar(&cpCount, "cp-count", 5, "")
 	flag.IntVar(&cpBufferSize, "cp-buffer-size", 100, "")
 	flag.StringVar(&cpFlushTick, "cp-flush-tick", "100ms", "")

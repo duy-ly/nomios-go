@@ -1,0 +1,64 @@
+version: '3.3'
+
+services:
+  mysql1:
+    build:
+      context: mysql1
+    container_name: mysql1
+    environment:
+      - MYSQL_ROOT_PASSWORD=12345678
+      - MYSQL_USER=mysqluser
+      - MYSQL_PASSWORD=mysqlpw
+      - MYSQL_DATABASE=catalog_db
+    ports:
+      - "3307:3306"
+  mysql2:
+    build:
+      context: mysql2
+    container_name: mysql2
+    environment:
+      - MYSQL_ROOT_PASSWORD=12345678
+      - MYSQL_DATABASE=catalog_db
+      - MYSQL_USER=mysqluser
+      - MYSQL_PASSWORD=mysqlpw
+    ports:
+      - "3308:3306"
+  mysql:
+    build:
+      context: haproxy
+    container_name: mysql
+    ports:
+      - "3306:3306"
+  zookeeper:
+    image: arm64v8/zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+  kafka:
+    image: wurstmeister/kafka
+    container_name: kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    depends_on:
+      - "zookeeper"
+  prometheus:
+    build:
+      context: prometheus
+    hostname: prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    restart: always
+  grafana:
+    build:
+      context: grafana
+    container_name: grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    restart: always
