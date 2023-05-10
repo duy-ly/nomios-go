@@ -2,6 +2,7 @@ package hyperloop
 
 import (
 	"github.com/duy-ly/nomios-go/consumerpool"
+	"github.com/duy-ly/nomios-go/logger"
 	"github.com/duy-ly/nomios-go/model"
 	"github.com/duy-ly/nomios-go/source"
 	"github.com/duy-ly/nomios-go/state"
@@ -9,7 +10,6 @@ import (
 
 type Hyperloop struct {
 	stream  chan []*model.NomiosEvent
-	cfg     HyperloopConfig
 	running bool
 
 	cp *consumerpool.ConsumerPool
@@ -17,25 +17,26 @@ type Hyperloop struct {
 	s  source.Source
 }
 
-func NewHyperloop(cfg HyperloopConfig) *Hyperloop {
-	if cfg.EventStreamSize == 0 {
-		cfg.EventStreamSize = 20000
+func NewHyperloop() *Hyperloop {
+	cfg := loadConfig()
+
+	stt, err := state.NewState(cfg.StateKind)
+	if err != nil {
+		logger.NomiosLog.Panic("Error when init state ", err)
+	}
+	cp, err := consumerpool.NewConsumerPool(cfg.PublisherKind)
+	if err != nil {
+		logger.NomiosLog.Panic("Error when init consumer pool ", err)
+	}
+	s, err := source.NewSource(cfg.SourceKind)
+	if err != nil {
+		logger.NomiosLog.Panic("Error when init source ", err)
 	}
 
 	h := new(Hyperloop)
-	h.cfg = cfg
 	h.stream = make(chan []*model.NomiosEvent, cfg.EventStreamSize)
-
-	stt, err := state.NewFileState("./checkpoint.nom")
-	if err != nil {
-		panic(err)
-	}
-	h.cp = consumerpool.NewConsumerPool(cfg.PoolConfig)
-	h.sm = state.NewStateManager(stt, h.cp.GetLastEventPos)
-	s, err := source.NewMySQLSource(h.cfg.SourceConfig)
-	if err != nil {
-		panic(err)
-	}
+	h.cp = cp
+	h.sm = state.NewStateManager(stt, cp.GetLastEventPos)
 	h.s = s
 
 	return h

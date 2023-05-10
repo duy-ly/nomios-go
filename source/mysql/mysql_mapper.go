@@ -1,4 +1,4 @@
-package source
+package mysqlsource
 
 import (
 	"sync/atomic"
@@ -120,7 +120,7 @@ func (h *EventMapperHandler) OnXID(header *replication.EventHeader, pos mysql.Po
 
 func (h *EventMapperHandler) OnGTID(header *replication.EventHeader, gtidSet mysql.GTIDSet) error {
 	newGtid := gtidSet.String()
-	logger.NomiosLog.Info("Start new gtid", newGtid)
+	logger.NomiosLog.Info("Start new gtid ", newGtid)
 
 	h.gtid.Store(&newGtid)
 

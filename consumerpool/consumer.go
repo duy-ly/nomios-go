@@ -23,7 +23,12 @@ type Consumer struct {
 	lastProcessedEvent atomic.Pointer[model.NomiosEvent]
 }
 
-func NewConsumer(partition int, bufferSize int, flushTick time.Duration) *Consumer {
+func NewConsumer(partition int, publisherKind string, bufferSize int, flushTick time.Duration) (*Consumer, error) {
+	p, err := publisher.NewPublisher(publisherKind)
+	if err != nil {
+		return nil, err
+	}
+
 	c := new(Consumer)
 	c.partition = partition
 	c.bufferSize = bufferSize
@@ -31,11 +36,11 @@ func NewConsumer(partition int, bufferSize int, flushTick time.Duration) *Consum
 	c.bufferQueue = make([][]*model.NomiosEvent, 0)
 	c.flushSig = make(chan bool, 1)
 	c.stopSig = make(chan bool, 1)
-	c.publisher = publisher.NewDummyPublisher()
+	c.publisher = p
 
 	c.lastProcessedEvent = atomic.Pointer[model.NomiosEvent]{}
 
-	return c
+	return c, err
 }
 
 func (c *Consumer) Start() {

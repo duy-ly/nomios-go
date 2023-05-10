@@ -1,28 +1,34 @@
-package state
+package filestate
 
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"sync/atomic"
 
 	"github.com/duy-ly/nomios-go/logger"
 )
 
+type StateData struct {
+	Pos string `json:"pos"`
+}
+
 type fileState struct {
-	fileName string
+	filePath string
 	pos      atomic.Pointer[string]
 }
 
-func NewFileState(name string) (State, error) {
+func NewFileState() (*fileState, error) {
+	cfg := loadConfig()
+
 	s := new(fileState)
-	s.fileName = name
+	s.filePath = cfg.Path
 	s.pos = atomic.Pointer[string]{}
 
-	fs, err := os.Stat(s.fileName)
+	fs, err := os.Stat(s.filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			s.pos.Store(new(string))
 			return s, nil
 		}
 
@@ -31,7 +37,7 @@ func NewFileState(name string) (State, error) {
 		}
 	}
 
-	data, err := os.ReadFile(s.fileName)
+	data, err := os.ReadFile(s.filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -52,21 +58,19 @@ func (s *fileState) SaveLastPos(newPos string) {
 		return
 	}
 
-	fmt.Println(newPos)
-
 	s.pos.Store(&newPos)
 
 	d, err := json.Marshal(&StateData{
 		Pos: newPos,
 	})
 	if err != nil {
-		logger.NomiosLog.Error("Error when marshal state data", err)
+		logger.NomiosLog.Error("Error when marshal state data ", err)
 		return
 	}
 
-	err = os.WriteFile(s.fileName, d, 0644)
+	err = os.WriteFile(s.filePath, d, 0644)
 	if err != nil {
-		logger.NomiosLog.Error("Error when store state to file", err)
+		logger.NomiosLog.Error("Error when store state to file ", err)
 		return
 	}
 }

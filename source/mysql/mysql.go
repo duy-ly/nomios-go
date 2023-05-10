@@ -1,24 +1,11 @@
-package source
+package mysqlsource
 
 import (
-	"fmt"
-
 	"github.com/duy-ly/nomios-go/logger"
 	"github.com/duy-ly/nomios-go/model"
 	"github.com/duy-ly/nomios-go/util"
 	"github.com/go-mysql-org/go-mysql/canal"
 )
-
-type MySQLSourceConfig struct {
-	// mysql binlog config
-	Host string
-	Port uint16
-	User string
-	Pass string
-
-	// syncer config
-	ServerID uint32
-}
 
 type mysqlSource struct {
 	stopSig chan bool
@@ -26,14 +13,17 @@ type mysqlSource struct {
 }
 
 // NewMySQLSource -- create new MySQL source from config
-func NewMySQLSource(cfg MySQLSourceConfig) (Source, error) {
+func NewMySQLSource() (*mysqlSource, error) {
+	cfg := loadConfig()
+
 	syncerCfg := canal.NewDefaultConfig()
-	syncerCfg.Addr = fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	syncerCfg.Addr = cfg.Addr
 	syncerCfg.Flavor = "mysql"
 	syncerCfg.User = cfg.User
 	syncerCfg.Password = cfg.Pass
 	syncerCfg.Dump.ExecutionPath = ""
 	syncerCfg.Logger = logger.NomiosLog
+	syncerCfg.ServerID = cfg.ServerID
 
 	// create instance
 	s := new(mysqlSource)

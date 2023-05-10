@@ -2,7 +2,6 @@ package consumerpool
 
 import (
 	"sync"
-	"time"
 
 	"github.com/duy-ly/nomios-go/model"
 	"github.com/duy-ly/nomios-go/util"
@@ -18,30 +17,25 @@ type ConsumerPool struct {
 }
 
 // NewConsumerPool -- create a pool of consumer
-func NewConsumerPool(cfg PoolConfig) *ConsumerPool {
-	if cfg.Count <= 0 {
-		cfg.Count = 1
-	}
-	if cfg.BufferSize <= 0 {
-		cfg.BufferSize = 100
-	}
-	if cfg.FlushTick <= 0 {
-		cfg.FlushTick = 100 * time.Millisecond
-	}
+func NewConsumerPool(publisherKind string) (*ConsumerPool, error) {
+	cfg := loadConfig()
 
 	p := new(ConsumerPool)
 	p.stopSig = make(chan bool, 1)
 	p.flushed = make(chan bool, 1)
 
-	for i := 0; i < cfg.Count; i++ {
-		c := NewConsumer(i, cfg.BufferSize, cfg.FlushTick)
+	for i := 0; i < cfg.PoolSize; i++ {
+		c, err := NewConsumer(i, publisherKind, cfg.BufferSize, cfg.FlushTick)
+		if err != nil {
+			return nil, err
+		}
 
 		c.Start()
 
 		p.consumers = append(p.consumers, c)
 	}
 
-	return p
+	return p, nil
 }
 
 // Start -- start consumer pool, get partition using hash function to pick consumer then handle NomiosEvent

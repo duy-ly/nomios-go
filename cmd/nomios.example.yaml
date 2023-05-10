@@ -1,0 +1,27 @@
+hyperloop:
+  state: file
+  source: mysql
+  publisher: dummy
+  stream_size: 20000
+
+consumer:
+  pool_size: 5
+  buffer_size: 1024
+  flush_tick: 100ms
+
+state:
+  file:
+    path: ./checkpoint.nom
+
+source:
+  mysql:
+    addr: 127.0.0.1:3306
+    user: user
+    password: password
+    server_id: 100
+
+publisher:
+  kafka:
+    addrs: 
+      - 127.0.0.1:9092
+    topic: my-topic
