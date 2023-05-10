@@ -2,17 +2,19 @@ package hyperloop
 
 import (
 	"github.com/duy-ly/nomios-go/consumerpool"
-	"github.com/duy-ly/nomios-go/event"
+	"github.com/duy-ly/nomios-go/model"
 	"github.com/duy-ly/nomios-go/source"
+	"github.com/duy-ly/nomios-go/state"
 )
 
 type Hyperloop struct {
-	stream  chan event.NomiosEvent
+	stream  chan []*model.NomiosEvent
 	cfg     HyperloopConfig
 	running bool
 
 	cp *consumerpool.ConsumerPool
-	s  *source.Source
+	sm *state.StateManager
+	s  source.Source
 }
 
 func NewHyperloop(cfg HyperloopConfig) *Hyperloop {
@@ -22,10 +24,15 @@ func NewHyperloop(cfg HyperloopConfig) *Hyperloop {
 
 	h := new(Hyperloop)
 	h.cfg = cfg
-	h.stream = make(chan event.NomiosEvent, cfg.EventStreamSize)
+	h.stream = make(chan []*model.NomiosEvent, cfg.EventStreamSize)
 
+	stt, err := state.NewFileState("./checkpoint.nom")
+	if err != nil {
+		panic(err)
+	}
 	h.cp = consumerpool.NewConsumerPool(cfg.PoolConfig)
-	s, err := source.NewSource(h.cfg.SourceConfig)
+	h.sm = state.NewStateManager(stt, h.cp.GetLastEventPos)
+	s, err := source.NewMySQLSource(h.cfg.SourceConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -35,17 +42,18 @@ func NewHyperloop(cfg HyperloopConfig) *Hyperloop {
 }
 
 func (h *Hyperloop) Start() {
-	// TODO: schedule state manager
+	h.sm.Start()
 
 	h.cp.Start(h.stream)
 
-	h.s.Start("", 0, h.stream)
+	pos := h.sm.GetState().GetLastPos()
+	h.s.Start(pos, h.stream)
 
 	h.running = true
 }
 
 func (h *Hyperloop) Stop() {
-	// TODO: stop state manager
+	h.sm.Stop()
 
 	// stop source first to prevent push more event to stream
 	h.s.Stop()
@@ -54,7 +62,7 @@ func (h *Hyperloop) Stop() {
 
 	h.cp.Stop()
 
-	// TODO: manual state checkpoint
+	h.sm.Checkpoint()
 }
 
 func (h *Hyperloop) IsRunning() bool {

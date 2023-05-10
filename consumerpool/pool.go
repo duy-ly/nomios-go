@@ -4,7 +4,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/duy-ly/nomios-go/event"
+	"github.com/duy-ly/nomios-go/model"
+	"github.com/duy-ly/nomios-go/util"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 type ConsumerPool struct {
@@ -43,7 +45,7 @@ func NewConsumerPool(cfg PoolConfig) *ConsumerPool {
 }
 
 // Start -- start consumer pool, get partition using hash function to pick consumer then handle NomiosEvent
-func (p *ConsumerPool) Start(stream chan event.NomiosEvent) {
+func (p *ConsumerPool) Start(stream chan []*model.NomiosEvent) {
 	go func() {
 		for {
 			select {
@@ -62,11 +64,34 @@ func (p *ConsumerPool) Start(stream chan event.NomiosEvent) {
 	}()
 }
 
-func (p *ConsumerPool) partitionEvent(e event.NomiosEvent) {
+func (p *ConsumerPool) GetLastEventPos() string {
+	var minPos *mysql.Position
+
+	for _, c := range p.consumers {
+		e := c.lastProcessedEvent.Load()
+		if e == nil {
+			continue
+		}
+
+		ePos := e.Metadata.GetPos()
+
+		if minPos == nil || minPos.Compare(ePos) == 1 {
+			minPos = &ePos
+		}
+	}
+
+	if minPos == nil {
+		return ""
+	}
+
+	return util.BuildEventPos(minPos)
+}
+
+func (p *ConsumerPool) partitionEvent(e []*model.NomiosEvent) {
 	// TODO: do partition
 	partitionIdx := 1
 
-	p.consumers[partitionIdx].Send(&e)
+	p.consumers[partitionIdx].Send(e)
 }
 
 func (p *ConsumerPool) Stop() {

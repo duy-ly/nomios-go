@@ -6,7 +6,7 @@ import (
 )
 
 type HyperloopConfig struct {
-	SourceConfig source.SourceConfig
+	SourceConfig source.MySQLSourceConfig
 	PoolConfig   consumerpool.PoolConfig
 
 	EventStreamSize int

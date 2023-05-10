@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/duy-ly/nomios-go/consumerpool"
 	"github.com/duy-ly/nomios-go/hyperloop"
+	"github.com/duy-ly/nomios-go/logger"
 	"github.com/duy-ly/nomios-go/source"
 )
 
@@ -64,11 +64,11 @@ func main() {
 
 	h := hyperloop.NewHyperloop(cfg)
 
-	fmt.Println("Nomios starting")
+	logger.NomiosLog.Debug("Nomios starting")
 
 	h.Start()
 
-	fmt.Println("Nomios is started")
+	logger.NomiosLog.Debug("Nomios is started")
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -77,9 +77,9 @@ func main() {
 	for {
 		select {
 		case <-c:
-			fmt.Println("Nomios start graceful terminate")
+			logger.NomiosLog.Debug("Nomios start graceful terminate")
 			h.Stop()
-			fmt.Println("Nomios is graceful terminated")
+			logger.NomiosLog.Debug("Nomios is graceful terminated")
 			return
 		default:
 		}

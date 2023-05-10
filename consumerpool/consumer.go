@@ -2,9 +2,11 @@ package consumerpool
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/duy-ly/nomios-go/event"
+	"github.com/duy-ly/nomios-go/model"
+	"github.com/duy-ly/nomios-go/publisher"
 )
 
 type Consumer struct {
@@ -12,13 +14,13 @@ type Consumer struct {
 	partition   int
 	bufferSize  int
 	flushTick   time.Duration
-	bufferQueue []*event.NomiosEvent
+	bufferQueue [][]*model.NomiosEvent
 	flushSig    chan bool
 	stopSig     chan bool
-	publisher   *Publisher
+	publisher   publisher.Publisher
 
 	// state
-	lastProcessedEvent *event.NomiosEvent
+	lastProcessedEvent atomic.Pointer[model.NomiosEvent]
 }
 
 func NewConsumer(partition int, bufferSize int, flushTick time.Duration) *Consumer {
@@ -26,10 +28,12 @@ func NewConsumer(partition int, bufferSize int, flushTick time.Duration) *Consum
 	c.partition = partition
 	c.bufferSize = bufferSize
 	c.flushTick = flushTick
-	c.bufferQueue = make([]*event.NomiosEvent, 0)
+	c.bufferQueue = make([][]*model.NomiosEvent, 0)
 	c.flushSig = make(chan bool, 1)
 	c.stopSig = make(chan bool, 1)
-	c.publisher = NewPublisher()
+	c.publisher = publisher.NewDummyPublisher()
+
+	c.lastProcessedEvent = atomic.Pointer[model.NomiosEvent]{}
 
 	return c
 }
@@ -52,11 +56,11 @@ func (c *Consumer) Start() {
 	}()
 }
 
-func (c *Consumer) GetLastProcessedEvent() *event.NomiosEvent {
-	return c.lastProcessedEvent
+func (c *Consumer) GetLastProcessedEvent() *model.NomiosEvent {
+	return c.lastProcessedEvent.Load()
 }
 
-func (c *Consumer) Send(e *event.NomiosEvent) {
+func (c *Consumer) Send(e []*model.NomiosEvent) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -74,14 +78,21 @@ func (c *Consumer) handle() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	tmp := make([]*event.NomiosEvent, 0)
+	tmp := make([][]*model.NomiosEvent, 0)
 	tmp, c.bufferQueue = c.bufferQueue, tmp
 
-	err := c.publisher.Publish(tmp)
-	if err != nil {
-		return err
+	for _, e := range tmp {
+		if len(e) == 0 {
+			continue
+		}
+
+		err := c.publisher.Publish(e)
+		if err != nil {
+			return err
+		}
+
+		c.lastProcessedEvent.Store(e[len(e)-1])
 	}
-	c.lastProcessedEvent = tmp[len(tmp)-1]
 
 	return nil
 }
@@ -89,4 +100,5 @@ func (c *Consumer) handle() error {
 func (c *Consumer) Stop() {
 	c.stopSig <- true
 	c.handle()
+	c.publisher.Close()
 }
