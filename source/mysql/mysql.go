@@ -38,12 +38,14 @@ func NewMySQLSource() (*mysqlSource, error) {
 	return s, nil
 }
 
-func (s *mysqlSource) Start(pos string, stream chan []*model.NomiosEvent) {
+func (s *mysqlSource) Start(posStr string, stream chan []*model.NomiosEvent) {
 	go func() {
-		s.syncer.SetEventHandler(NewEventMapperHandler(stream))
+		pos := util.ParseEventPos(posStr)
+
+		s.syncer.SetEventHandler(NewEventMapperHandler(pos.Name, stream))
 
 		// Start canal
-		err := s.syncer.RunFrom(util.ParseEventPos(pos))
+		err := s.syncer.RunFrom(pos)
 		if err != nil {
 			panic(err)
 		}

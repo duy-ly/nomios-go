@@ -16,14 +16,17 @@ type EventMapperHandler struct {
 	canal.DummyEventHandler
 
 	gtid    atomic.Pointer[string]
-	posName atomic.Pointer[string]
+	logName atomic.Pointer[string]
 	stream  chan []*model.NomiosEvent
 }
 
-func NewEventMapperHandler(stream chan []*model.NomiosEvent) canal.EventHandler {
+func NewEventMapperHandler(curLogName string, stream chan []*model.NomiosEvent) canal.EventHandler {
+	logName := atomic.Pointer[string]{}
+	logName.Store(&curLogName)
+
 	return &EventMapperHandler{
 		gtid:    atomic.Pointer[string]{},
-		posName: atomic.Pointer[string]{},
+		logName: logName,
 		stream:  stream,
 	}
 }
@@ -32,7 +35,7 @@ func (h *EventMapperHandler) OnRotate(header *replication.EventHeader, e *replic
 	logger.NomiosLog.Infof("Rotate event: - Position: %d;- NextName: %s", e.Position, e.NextLogName)
 
 	logName := string(e.NextLogName)
-	h.posName.Store(&logName)
+	h.logName.Store(&logName)
 
 	return nil
 }
@@ -47,7 +50,7 @@ func (h *EventMapperHandler) OnRow(e *canal.RowsEvent) error {
 			Database: e.Table.Schema,
 		},
 		BinlogPosition: mysql.Position{
-			Name: *h.posName.Load(),
+			Name: *h.logName.Load(),
 			Pos:  e.Header.LogPos,
 		},
 	}
@@ -87,7 +90,6 @@ func (h *EventMapperHandler) OnRow(e *canal.RowsEvent) error {
 
 			se = append(se, &ne)
 		}
-
 	}
 
 	h.stream <- se
@@ -114,20 +116,12 @@ func (h *EventMapperHandler) generateRow(values []interface{}, cols []schema.Tab
 	}
 }
 
-func (h *EventMapperHandler) OnXID(header *replication.EventHeader, pos mysql.Position) error {
-	return nil
-}
-
 func (h *EventMapperHandler) OnGTID(header *replication.EventHeader, gtidSet mysql.GTIDSet) error {
 	newGtid := gtidSet.String()
 	logger.NomiosLog.Info("Start new gtid ", newGtid)
 
 	h.gtid.Store(&newGtid)
 
-	return nil
-}
-
-func (h *EventMapperHandler) OnPosSynced(header *replication.EventHeader, pos mysql.Position, gtidSet mysql.GTIDSet, isForce bool) error {
 	return nil
 }
 
