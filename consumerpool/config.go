@@ -7,12 +7,17 @@ import (
 )
 
 type PoolConfig struct {
-	PoolSize   int
-	BufferSize int
-	FlushTick  time.Duration
+	PoolStreamSize int
+	PoolSize       int
+	BufferSize     int
+	FlushTick      time.Duration
 }
 
 func loadConfig() PoolConfig {
+	poolStreamSize := viper.GetInt("consumer.pool_stream_size")
+	if poolStreamSize == 0 {
+		poolStreamSize = 20000
+	}
 	poolSize := viper.GetInt("consumer.pool_size")
 	if poolSize == 0 {
 		poolSize = 5
@@ -27,8 +32,9 @@ func loadConfig() PoolConfig {
 	}
 
 	return PoolConfig{
-		PoolSize:   poolSize,
-		BufferSize: bufferSize,
-		FlushTick:  flushTick,
+		PoolStreamSize: poolStreamSize,
+		PoolSize:       poolSize,
+		BufferSize:     bufferSize,
+		FlushTick:      flushTick,
 	}
 }

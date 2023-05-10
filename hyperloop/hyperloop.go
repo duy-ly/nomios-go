@@ -3,13 +3,11 @@ package hyperloop
 import (
 	"github.com/duy-ly/nomios-go/consumerpool"
 	"github.com/duy-ly/nomios-go/logger"
-	"github.com/duy-ly/nomios-go/model"
 	"github.com/duy-ly/nomios-go/source"
 	"github.com/duy-ly/nomios-go/state"
 )
 
 type Hyperloop struct {
-	stream  chan []*model.NomiosEvent
 	running bool
 
 	cp *consumerpool.ConsumerPool
@@ -18,25 +16,22 @@ type Hyperloop struct {
 }
 
 func NewHyperloop() *Hyperloop {
-	cfg := loadConfig()
-
-	stt, err := state.NewState(cfg.StateKind)
+	stt, err := state.NewState()
 	if err != nil {
 		logger.NomiosLog.Panic("Error when init state ", err)
 	}
-	cp, err := consumerpool.NewConsumerPool(cfg.PublisherKind)
+	cp, err := consumerpool.NewConsumerPool()
 	if err != nil {
 		logger.NomiosLog.Panic("Error when init consumer pool ", err)
 	}
-	s, err := source.NewSource(cfg.SourceKind)
+	s, err := source.NewSource(cp.GetStream())
 	if err != nil {
 		logger.NomiosLog.Panic("Error when init source ", err)
 	}
 
 	h := new(Hyperloop)
-	h.stream = make(chan []*model.NomiosEvent, cfg.EventStreamSize)
 	h.cp = cp
-	h.sm = state.NewStateManager(stt, cp.GetLastEventPos)
+	h.sm = state.NewStateManager(stt, cp.GetLastGTID)
 	h.s = s
 
 	return h
@@ -45,10 +40,9 @@ func NewHyperloop() *Hyperloop {
 func (h *Hyperloop) Start() {
 	h.sm.Start()
 
-	h.cp.Start(h.stream)
+	h.cp.Start()
 
-	pos := h.sm.GetState().GetLastPos()
-	h.s.Start(pos, h.stream)
+	h.s.Start(h.sm.GetState().GetLastID(), h.cp.GetStream())
 
 	h.running = true
 }
@@ -58,8 +52,6 @@ func (h *Hyperloop) Stop() {
 
 	// stop source first to prevent push more event to stream
 	h.s.Stop()
-
-	close(h.stream)
 
 	h.cp.Stop()
 

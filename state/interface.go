@@ -2,14 +2,20 @@ package state
 
 import (
 	filestate "github.com/duy-ly/nomios-go/state/file"
+	"github.com/spf13/viper"
 )
 
 type State interface {
-	SaveLastPos(string)
-	GetLastPos() string
+	SaveLastID(string)
+	GetLastID() string
 }
 
-func NewState(kind string) (State, error) {
+func NewState() (State, error) {
+	kind := viper.GetString("state.kind")
+	if kind == "" {
+		kind = "file"
+	}
+
 	switch kind {
 	default:
 		return filestate.NewFileState()

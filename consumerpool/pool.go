@@ -4,28 +4,28 @@ import (
 	"sync"
 
 	"github.com/duy-ly/nomios-go/model"
-	"github.com/duy-ly/nomios-go/util"
-	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 type ConsumerPool struct {
 	cfg     PoolConfig
 	stopSig chan bool
 	flushed chan bool
+	stream  chan []*model.NomiosEvent
 
 	consumers []*Consumer
 }
 
 // NewConsumerPool -- create a pool of consumer
-func NewConsumerPool(publisherKind string) (*ConsumerPool, error) {
+func NewConsumerPool() (*ConsumerPool, error) {
 	cfg := loadConfig()
 
 	p := new(ConsumerPool)
 	p.stopSig = make(chan bool, 1)
 	p.flushed = make(chan bool, 1)
+	p.stream = make(chan []*model.NomiosEvent, cfg.PoolStreamSize)
 
 	for i := 0; i < cfg.PoolSize; i++ {
-		c, err := NewConsumer(i, publisherKind, cfg.BufferSize, cfg.FlushTick)
+		c, err := NewConsumer(i, cfg.BufferSize, cfg.FlushTick)
 		if err != nil {
 			return nil, err
 		}
@@ -39,27 +39,33 @@ func NewConsumerPool(publisherKind string) (*ConsumerPool, error) {
 }
 
 // Start -- start consumer pool, get partition using hash function to pick consumer then handle NomiosEvent
-func (p *ConsumerPool) Start(stream chan []*model.NomiosEvent) {
+func (p *ConsumerPool) Start() {
 	go func() {
 		for {
 			select {
 			case <-p.stopSig:
+				close(p.stream)
+
 				// ensure get all event from stream
-				for e := range stream {
+				for e := range p.stream {
 					p.partitionEvent(e)
 				}
 
 				p.flushed <- true
 				return
-			case e := <-stream:
+			case e := <-p.stream:
 				p.partitionEvent(e)
 			}
 		}
 	}()
 }
 
-func (p *ConsumerPool) GetLastEventPos() string {
-	var minPos *mysql.Position
+func (p *ConsumerPool) GetStream() chan []*model.NomiosEvent {
+	return p.stream
+}
+
+func (p *ConsumerPool) GetLastGTID() string {
+	var lastEvent *model.NomiosEvent
 
 	for _, c := range p.consumers {
 		e := c.lastProcessedEvent.Load()
@@ -67,18 +73,24 @@ func (p *ConsumerPool) GetLastEventPos() string {
 			continue
 		}
 
-		ePos := e.Metadata.GetPos()
+		if lastEvent == nil {
+			lastEvent = e
+			continue
+		}
 
-		if minPos == nil || minPos.Compare(ePos) == 1 {
-			minPos = &ePos
+		ePos := e.Metadata.GetPos()
+		lastPos := lastEvent.Metadata.GetPos()
+
+		if lastPos.Compare(ePos) == 1 {
+			lastEvent = e
 		}
 	}
 
-	if minPos == nil {
+	if lastEvent == nil {
 		return ""
 	}
 
-	return util.BuildEventPos(minPos)
+	return lastEvent.Metadata.GetID()
 }
 
 func (p *ConsumerPool) partitionEvent(e []*model.NomiosEvent) {

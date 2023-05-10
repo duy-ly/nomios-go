@@ -41,7 +41,7 @@ func (m *StateManager) Checkpoint() {
 		return
 	}
 
-	m.s.SaveLastPos(m.collector())
+	m.s.SaveLastID(m.collector())
 }
 
 func (m *StateManager) GetState() State {

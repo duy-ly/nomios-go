@@ -15,27 +15,19 @@ import (
 type EventMapperHandler struct {
 	canal.DummyEventHandler
 
-	gtid    atomic.Pointer[string]
-	logName atomic.Pointer[string]
-	stream  chan []*model.NomiosEvent
+	gtid   atomic.Pointer[string]
+	stream chan []*model.NomiosEvent
 }
 
-func NewEventMapperHandler(curLogName string, stream chan []*model.NomiosEvent) canal.EventHandler {
-	logName := atomic.Pointer[string]{}
-	logName.Store(&curLogName)
-
+func NewEventMapperHandler(stream chan []*model.NomiosEvent) canal.EventHandler {
 	return &EventMapperHandler{
-		gtid:    atomic.Pointer[string]{},
-		logName: logName,
-		stream:  stream,
+		gtid:   atomic.Pointer[string]{},
+		stream: stream,
 	}
 }
 
 func (h *EventMapperHandler) OnRotate(header *replication.EventHeader, e *replication.RotateEvent) error {
 	logger.NomiosLog.Infof("Rotate event: - Position: %d;- NextName: %s", e.Position, e.NextLogName)
-
-	logName := string(e.NextLogName)
-	h.logName.Store(&logName)
 
 	return nil
 }
@@ -50,8 +42,7 @@ func (h *EventMapperHandler) OnRow(e *canal.RowsEvent) error {
 			Database: e.Table.Schema,
 		},
 		BinlogPosition: mysql.Position{
-			Name: *h.logName.Load(),
-			Pos:  e.Header.LogPos,
+			Pos: e.Header.LogPos,
 		},
 	}
 

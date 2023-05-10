@@ -3,8 +3,8 @@ package mysqlsource
 import (
 	"github.com/duy-ly/nomios-go/logger"
 	"github.com/duy-ly/nomios-go/model"
-	"github.com/duy-ly/nomios-go/util"
 	"github.com/go-mysql-org/go-mysql/canal"
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 type mysqlSource struct {
@@ -38,16 +38,19 @@ func NewMySQLSource() (*mysqlSource, error) {
 	return s, nil
 }
 
-func (s *mysqlSource) Start(posStr string, stream chan []*model.NomiosEvent) {
+func (s *mysqlSource) Start(lastID string, stream chan []*model.NomiosEvent) {
 	go func() {
-		pos := util.ParseEventPos(posStr)
-
-		s.syncer.SetEventHandler(NewEventMapperHandler(pos.Name, stream))
+		s.syncer.SetEventHandler(NewEventMapperHandler(stream))
 
 		// Start canal
-		err := s.syncer.RunFrom(pos)
+		gtidSet, err := mysql.ParseGTIDSet("mysql", lastID)
 		if err != nil {
-			panic(err)
+			logger.NomiosLog.Panic("Error when parse gtid set ", err)
+		}
+
+		err = s.syncer.StartFromGTID(gtidSet)
+		if err != nil {
+			logger.NomiosLog.Panic("Error when start from gtid ", err)
 		}
 
 		<-s.stopSig

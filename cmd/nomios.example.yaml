@@ -1,19 +1,16 @@
-hyperloop:
-  state: file
-  source: mysql
-  publisher: dummy
-  stream_size: 20000
-
 consumer:
+  pool_stream_size: 20000
   pool_size: 5
   buffer_size: 1024
   flush_tick: 100ms
 
 state:
+  kind: file
   file:
     path: ./checkpoint.nom
 
 source:
+  kind: mysql
   mysql:
     addr: 127.0.0.1:3306
     user: user
@@ -21,6 +18,7 @@ source:
     server_id: 100
 
 publisher:
+  kind: kafka
   kafka:
     addrs: 
       - 127.0.0.1:9092

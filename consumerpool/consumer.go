@@ -23,8 +23,8 @@ type Consumer struct {
 	lastProcessedEvent atomic.Pointer[model.NomiosEvent]
 }
 
-func NewConsumer(partition int, publisherKind string, bufferSize int, flushTick time.Duration) (*Consumer, error) {
-	p, err := publisher.NewPublisher(publisherKind)
+func NewConsumer(partition int, bufferSize int, flushTick time.Duration) (*Consumer, error) {
+	p, err := publisher.NewPublisher()
 	if err != nil {
 		return nil, err
 	}

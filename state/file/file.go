@@ -10,12 +10,12 @@ import (
 )
 
 type StateData struct {
-	Pos string `json:"pos"`
+	ID string `json:"id"`
 }
 
 type fileState struct {
 	filePath string
-	pos      atomic.Pointer[string]
+	lastID   atomic.Pointer[string]
 }
 
 func NewFileState() (*fileState, error) {
@@ -23,12 +23,12 @@ func NewFileState() (*fileState, error) {
 
 	s := new(fileState)
 	s.filePath = cfg.Path
-	s.pos = atomic.Pointer[string]{}
+	s.lastID = atomic.Pointer[string]{}
 
 	fs, err := os.Stat(s.filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			s.pos.Store(new(string))
+			s.lastID.Store(new(string))
 			return s, nil
 		}
 
@@ -48,20 +48,20 @@ func NewFileState() (*fileState, error) {
 		return nil, err
 	}
 
-	s.pos.Store(&sd.Pos)
+	s.lastID.Store(&sd.ID)
 
 	return s, nil
 }
 
-func (s *fileState) SaveLastPos(newPos string) {
-	if newPos == "" || *s.pos.Load() == newPos {
+func (s *fileState) SaveLastID(newID string) {
+	if newID == "" || *s.lastID.Load() == newID {
 		return
 	}
 
-	s.pos.Store(&newPos)
+	s.lastID.Store(&newID)
 
 	d, err := json.Marshal(&StateData{
-		Pos: newPos,
+		ID: newID,
 	})
 	if err != nil {
 		logger.NomiosLog.Error("Error when marshal state data ", err)
@@ -75,6 +75,6 @@ func (s *fileState) SaveLastPos(newPos string) {
 	}
 }
 
-func (s *fileState) GetLastPos() string {
-	return *s.pos.Load()
+func (s *fileState) GetLastID() string {
+	return *s.lastID.Load()
 }

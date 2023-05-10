@@ -3,6 +3,7 @@ package source
 import (
 	"github.com/duy-ly/nomios-go/model"
 	mysqlsource "github.com/duy-ly/nomios-go/source/mysql"
+	"github.com/spf13/viper"
 )
 
 type Source interface {
@@ -10,7 +11,12 @@ type Source interface {
 	Stop()
 }
 
-func NewSource(kind string) (Source, error) {
+func NewSource(stream chan []*model.NomiosEvent) (Source, error) {
+	kind := viper.GetString("source.kind")
+	if kind == "" {
+		kind = "mysql"
+	}
+
 	switch kind {
 	default:
 		return mysqlsource.NewMySQLSource()
