@@ -93,11 +93,22 @@ func (p *ConsumerPool) GetLastGTID() string {
 	return lastEvent.Metadata.GetID()
 }
 
-func (p *ConsumerPool) partitionEvent(e []*model.NomiosEvent) {
-	// TODO: do partition
-	partitionIdx := 1
+func (p *ConsumerPool) partitionEvent(events []*model.NomiosEvent) {
+	mapPartitionEvents := make(map[int][]*model.NomiosEvent)
 
-	p.consumers[partitionIdx].Send(e)
+	for _, e := range events {
+		partitionID := e.GetPartitionID(len(p.consumers))
+
+		if _, exist := mapPartitionEvents[partitionID]; !exist {
+			mapPartitionEvents[partitionID] = make([]*model.NomiosEvent, 0)
+		}
+
+		mapPartitionEvents[partitionID] = append(mapPartitionEvents[partitionID], e)
+	}
+
+	for partitionID, e := range mapPartitionEvents {
+		p.consumers[partitionID].Send(e)
+	}
 }
 
 func (p *ConsumerPool) Stop() {

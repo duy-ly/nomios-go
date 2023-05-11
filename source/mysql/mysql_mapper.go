@@ -59,7 +59,7 @@ func (h *EventMapperHandler) OnRow(e *canal.RowsEvent) error {
 			continue
 		}
 
-		row := h.generateRow(r, e.Table.Columns)
+		row := h.generateRow(r, e.Table)
 
 		switch e.Action {
 		case "insert":
@@ -68,7 +68,7 @@ func (h *EventMapperHandler) OnRow(e *canal.RowsEvent) error {
 
 			se = append(se, &ne)
 		case "update":
-			after := h.generateRow(e.Rows[i+1], e.Table.Columns)
+			after := h.generateRow(e.Rows[i+1], e.Table)
 
 			ne := base
 			ne.Before = *row
@@ -88,22 +88,31 @@ func (h *EventMapperHandler) OnRow(e *canal.RowsEvent) error {
 	return nil
 }
 
-func (h *EventMapperHandler) generateRow(values []interface{}, cols []schema.TableColumn) *model.Row {
+func (h *EventMapperHandler) generateRow(values []interface{}, table *schema.Table) *model.Row {
+	primaryKeys := make([]string, 0)
 	rowData := make(map[string]interface{})
 
-	if len(values) != len(cols) {
-		logger.NomiosLog.Errorf("Row length %d and column length %d don't match", len(values), len(cols))
+	if len(values) != len(table.Columns) {
+		logger.NomiosLog.Errorf("Row length %d and column length %d don't match", len(values), len(table.Columns))
 		return nil
 	}
 
+	for _, i := range table.Indexes {
+		if i.Name == "PRIMARY" {
+			primaryKeys = i.Columns
+			break
+		}
+	}
+
 	for i, v := range values {
-		c := cols[i]
+		c := table.Columns[i]
 
 		rowData[c.Name] = v
 	}
 
 	return &model.Row{
-		Values: rowData,
+		PrimaryKeys: primaryKeys,
+		Values:      rowData,
 	}
 }
 

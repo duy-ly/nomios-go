@@ -21,7 +21,7 @@ func NewKafkaPublisher() (*kafkaPublisher, error) {
 		Addr:                   kafka.TCP(cfg.Addrs...),
 		Topic:                  cfg.Topic,
 		AllowAutoTopicCreation: true,
-		// Balancer: &kafka.Hash{},
+		Balancer:               &kafka.Hash{},
 	}
 
 	return p, nil
@@ -38,6 +38,7 @@ func (p *kafkaPublisher) Publish(msg []*model.NomiosEvent) error {
 		}
 
 		kmsg = append(kmsg, kafka.Message{
+			Key:   []byte(e.GetPartitionKey()),
 			Value: m,
 		})
 	}

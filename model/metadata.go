@@ -4,6 +4,8 @@ import "github.com/go-mysql-org/go-mysql/mysql"
 
 type Metadata interface {
 	GetID() string
+	GetTableName() string
+	GetDatabaseName() string
 	GetPos() mysql.Position
 }
 
@@ -17,6 +19,14 @@ type MySQLMetadata struct {
 
 func (m *MySQLMetadata) GetID() string {
 	return m.GTID
+}
+
+func (m *MySQLMetadata) GetTableName() string {
+	return m.TableSchema.Name
+}
+
+func (m *MySQLMetadata) GetDatabaseName() string {
+	return m.TableSchema.Database
 }
 
 func (m *MySQLMetadata) GetPos() mysql.Position {
