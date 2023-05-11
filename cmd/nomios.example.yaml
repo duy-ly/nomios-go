@@ -5,6 +5,7 @@ consumer:
   flush_tick: 100ms
 
 state:
+  checkpoint_cron: 100ms
   kind: file
   file:
     path: ./checkpoint.nom

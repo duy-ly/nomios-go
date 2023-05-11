@@ -11,7 +11,7 @@ type Hyperloop struct {
 	running bool
 
 	cp *consumerpool.ConsumerPool
-	sm *state.StateManager
+	sm state.StateManager
 	s  source.Source
 }
 
@@ -24,14 +24,15 @@ func NewHyperloop() *Hyperloop {
 	if err != nil {
 		logger.NomiosLog.Panic("Error when init consumer pool ", err)
 	}
-	s, err := source.NewSource(cp.GetStream())
+	sm := state.NewStateManager(stt, cp.GetLastGTID)
+	s, err := source.NewSource()
 	if err != nil {
 		logger.NomiosLog.Panic("Error when init source ", err)
 	}
 
 	h := new(Hyperloop)
 	h.cp = cp
-	h.sm = state.NewStateManager(stt, cp.GetLastGTID)
+	h.sm = sm
 	h.s = s
 
 	return h
@@ -42,7 +43,7 @@ func (h *Hyperloop) Start() {
 
 	h.cp.Start()
 
-	h.s.Start(h.sm.GetState().GetLastID(), h.cp.GetStream())
+	h.s.Start(h.sm.GetLastCheckpoint(), h.cp.GetStream())
 
 	h.running = true
 }

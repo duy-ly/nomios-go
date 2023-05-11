@@ -31,10 +31,10 @@ func NewFileState() (*fileState, error) {
 			s.lastID.Store(new(string))
 			return s, nil
 		}
+	}
 
-		if fs.IsDir() {
-			return nil, errors.New("state path is dir not file")
-		}
+	if fs.IsDir() {
+		return nil, errors.New("state path is dir not file")
 	}
 
 	data, err := os.ReadFile(s.filePath)

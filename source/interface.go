@@ -11,7 +11,7 @@ type Source interface {
 	Stop()
 }
 
-func NewSource(stream chan []*model.NomiosEvent) (Source, error) {
+func NewSource() (Source, error) {
 	kind := viper.GetString("source.kind")
 	if kind == "" {
 		kind = "mysql"

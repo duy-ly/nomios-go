@@ -4,29 +4,41 @@ import (
 	"time"
 )
 
-type StateManager struct {
+type StateManager interface {
+	Start()
+	Checkpoint()
+	GetLastCheckpoint() string
+	Stop()
+}
+
+type stateManager struct {
 	s State
 
+	cron      time.Duration
 	stopSig   chan bool
 	collector func() string
 }
 
-func NewStateManager(s State, fn func() string) *StateManager {
-	m := new(StateManager)
+func NewStateManager(s State, collectFn func() string) StateManager {
+	cfg := loadConfig()
+
+	m := new(stateManager)
 	m.s = s
+	m.cron = cfg.Cron
 	m.stopSig = make(chan bool, 1)
-	m.collector = fn
+	m.collector = collectFn
 
 	return m
 }
 
-func (m *StateManager) Start() {
+func (m *stateManager) Start() {
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := time.NewTicker(m.cron)
 
 		for {
 			select {
 			case <-m.stopSig:
+				ticker.Stop()
 				return
 			case <-ticker.C:
 				m.Checkpoint()
@@ -36,7 +48,7 @@ func (m *StateManager) Start() {
 	}()
 }
 
-func (m *StateManager) Checkpoint() {
+func (m *stateManager) Checkpoint() {
 	if m.collector == nil {
 		return
 	}
@@ -44,10 +56,10 @@ func (m *StateManager) Checkpoint() {
 	m.s.SaveLastID(m.collector())
 }
 
-func (m *StateManager) GetState() State {
-	return m.s
+func (m *stateManager) GetLastCheckpoint() string {
+	return m.s.GetLastID()
 }
 
-func (m *StateManager) Stop() {
+func (m *stateManager) Stop() {
 	m.stopSig <- true
 }
