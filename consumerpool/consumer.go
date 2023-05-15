@@ -9,7 +9,14 @@ import (
 	"github.com/duy-ly/nomios-go/publisher"
 )
 
-type Consumer struct {
+type Consumer interface {
+	Start()
+	GetLastProcessedEvent() *model.NomiosEvent
+	Send(e []*model.NomiosEvent)
+	Stop()
+}
+
+type consumer struct {
 	mu          sync.Mutex
 	partition   int
 	bufferSize  int
@@ -23,13 +30,13 @@ type Consumer struct {
 	lastProcessedEvent atomic.Pointer[model.NomiosEvent]
 }
 
-func NewConsumer(partition int, bufferSize int, flushTick time.Duration) (*Consumer, error) {
+func NewConsumer(partition int, bufferSize int, flushTick time.Duration) (*consumer, error) {
 	p, err := publisher.NewPublisher()
 	if err != nil {
 		return nil, err
 	}
 
-	c := new(Consumer)
+	c := new(consumer)
 	c.partition = partition
 	c.bufferSize = bufferSize
 	c.flushTick = flushTick
@@ -43,7 +50,7 @@ func NewConsumer(partition int, bufferSize int, flushTick time.Duration) (*Consu
 	return c, err
 }
 
-func (c *Consumer) Start() {
+func (c *consumer) Start() {
 	go func() {
 		ticker := time.NewTicker(c.flushTick)
 
@@ -61,11 +68,11 @@ func (c *Consumer) Start() {
 	}()
 }
 
-func (c *Consumer) GetLastProcessedEvent() *model.NomiosEvent {
+func (c *consumer) GetLastProcessedEvent() *model.NomiosEvent {
 	return c.lastProcessedEvent.Load()
 }
 
-func (c *Consumer) Send(e []*model.NomiosEvent) {
+func (c *consumer) Send(e []*model.NomiosEvent) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -75,7 +82,7 @@ func (c *Consumer) Send(e []*model.NomiosEvent) {
 	}
 }
 
-func (c *Consumer) handle() error {
+func (c *consumer) handle() error {
 	if len(c.bufferQueue) == 0 {
 		return nil
 	}
@@ -102,7 +109,7 @@ func (c *Consumer) handle() error {
 	return nil
 }
 
-func (c *Consumer) Stop() {
+func (c *consumer) Stop() {
 	c.stopSig <- true
 	c.handle()
 	c.publisher.Close()

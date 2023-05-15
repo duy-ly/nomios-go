@@ -21,6 +21,9 @@ func NewMySQLSource() (*mysqlSource, error) {
 	syncerCfg.Flavor = "mysql"
 	syncerCfg.User = cfg.User
 	syncerCfg.Password = cfg.Pass
+	syncerCfg.IncludeTableRegex = buildIncludeTableRegex(cfg.Database, cfg.TableIncludeList)
+	syncerCfg.ExcludeTableRegex = []string{"mysql\\..*"}
+	syncerCfg.ParseTime = true
 	syncerCfg.Dump.ExecutionPath = ""
 	syncerCfg.Logger = logger.NomiosLog
 	syncerCfg.ServerID = cfg.ServerID

@@ -15,6 +15,10 @@ type mockState struct {
 	counter int32
 }
 
+func (m *mockState) Reset() {
+	m.counter = 0
+}
+
 func (m *mockState) SaveLastID(string) {
 	atomic.AddInt32(&m.counter, 1)
 }
@@ -32,18 +36,51 @@ func Test_NewStateManager(t *testing.T) {
 
 	s := &mockState{}
 
-	sm := state.NewStateManager(s, mockCollectFn)
-	sm.Start()
+	before := func() {
+		s.Reset()
+	}
 
-	time.Sleep(3 * time.Second)
+	type testCase struct {
+		name           string
+		waitBeforeStop time.Duration
+		collectFn      func() string
+		expectCron     string
+		expectManual   string
+	}
 
-	sm.Stop()
+	suite := make([]testCase, 0)
 
-	time.Sleep(time.Millisecond) // make sure state cron complete stop
+	suite = append(suite, testCase{
+		name: "should_success_update_state",
 
-	assert.Equal(t, "30", sm.GetLastCheckpoint(), "check state manager cron")
+		waitBeforeStop: 3 * time.Second,
+		collectFn:      mockCollectFn,
+		expectCron:     "30",
+		expectManual:   "31",
+	})
 
-	sm.Checkpoint()
+	suite = append(suite, testCase{
+		name:         "should_success_no_collect_no_update",
+		expectCron:   "0",
+		expectManual: "0",
+	})
 
-	assert.Equal(t, "31", sm.GetLastCheckpoint(), "check state manager manual checkpoint")
+	for _, tc := range suite {
+		before()
+
+		sm := state.NewStateManager(s, tc.collectFn)
+		sm.Start()
+
+		time.Sleep(tc.waitBeforeStop)
+
+		sm.Stop()
+
+		time.Sleep(time.Millisecond) // make sure state cron complete stop
+
+		assert.Equal(t, tc.expectCron, sm.GetLastCheckpoint(), "check state manager cron. tc %s", tc.name)
+
+		sm.Checkpoint()
+
+		assert.Equal(t, tc.expectManual, sm.GetLastCheckpoint(), "check state manager manual checkpoint. tc %s", tc.name)
+	}
 }

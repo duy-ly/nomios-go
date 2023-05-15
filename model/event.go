@@ -7,16 +7,15 @@ import (
 )
 
 type Row struct {
-	Metadata Metadata
+	Metadata Metadata `json:"-"`
 
-	PrimaryKeys []string
-	Values      map[string]interface{}
+	Values map[string]interface{} `json:"values"`
 }
 
-func (r *Row) GetPrimaryValues() string {
+func (r *Row) GetPrimaryValues(columns []string) string {
 	res := ""
 
-	for _, c := range r.PrimaryKeys {
+	for _, c := range columns {
 		v := r.Values[c]
 
 		res = fmt.Sprintf("%s:%v", res, v)
@@ -26,15 +25,15 @@ func (r *Row) GetPrimaryValues() string {
 }
 
 type NomiosEvent struct {
-	Metadata  Metadata
-	Timestamp int64
+	Metadata  Metadata `json:"metadata"`
+	Timestamp int64    `json:"timestamp"`
 
-	Before Row
-	After  Row
+	Before Row `json:"before,omitempty"`
+	After  Row `json:"after,omitempty"`
 }
 
 func (e *NomiosEvent) GetPartitionKey() string {
-	return fmt.Sprintf("%s:%s:%s", e.Metadata.GetTableName(), e.Metadata.GetDatabaseName(), e.After.GetPrimaryValues())
+	return fmt.Sprintf("%s:%s:%s", e.Metadata.GetTableName(), e.Metadata.GetDatabaseName(), e.After.GetPrimaryValues(e.Metadata.GetPrimaryKeys()))
 }
 
 func (e *NomiosEvent) GetPartitionID(size int) int {

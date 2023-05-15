@@ -6,20 +6,27 @@ import (
 	"github.com/duy-ly/nomios-go/model"
 )
 
-type ConsumerPool struct {
+type ConsumerPool interface {
+	Start()
+	GetStream() chan []*model.NomiosEvent
+	GetLastGTID() string
+	Stop()
+}
+
+type consumerPool struct {
 	cfg     PoolConfig
 	stopSig chan bool
 	flushed chan bool
 	stream  chan []*model.NomiosEvent
 
-	consumers []*Consumer
+	consumers []Consumer
 }
 
 // NewConsumerPool -- create a pool of consumer
-func NewConsumerPool() (*ConsumerPool, error) {
+func NewConsumerPool() (*consumerPool, error) {
 	cfg := loadConfig()
 
-	p := new(ConsumerPool)
+	p := new(consumerPool)
 	p.stopSig = make(chan bool, 1)
 	p.flushed = make(chan bool, 1)
 	p.stream = make(chan []*model.NomiosEvent, cfg.PoolStreamSize)
@@ -39,7 +46,7 @@ func NewConsumerPool() (*ConsumerPool, error) {
 }
 
 // Start -- start consumer pool, get partition using hash function to pick consumer then handle NomiosEvent
-func (p *ConsumerPool) Start() {
+func (p *consumerPool) Start() {
 	go func() {
 		for {
 			select {
@@ -60,15 +67,15 @@ func (p *ConsumerPool) Start() {
 	}()
 }
 
-func (p *ConsumerPool) GetStream() chan []*model.NomiosEvent {
+func (p *consumerPool) GetStream() chan []*model.NomiosEvent {
 	return p.stream
 }
 
-func (p *ConsumerPool) GetLastGTID() string {
+func (p *consumerPool) GetLastGTID() string {
 	var lastEvent *model.NomiosEvent
 
 	for _, c := range p.consumers {
-		e := c.lastProcessedEvent.Load()
+		e := c.GetLastProcessedEvent()
 		if e == nil {
 			continue
 		}
@@ -93,7 +100,7 @@ func (p *ConsumerPool) GetLastGTID() string {
 	return lastEvent.Metadata.GetID()
 }
 
-func (p *ConsumerPool) partitionEvent(events []*model.NomiosEvent) {
+func (p *consumerPool) partitionEvent(events []*model.NomiosEvent) {
 	mapPartitionEvents := make(map[int][]*model.NomiosEvent)
 
 	for _, e := range events {
@@ -111,14 +118,14 @@ func (p *ConsumerPool) partitionEvent(events []*model.NomiosEvent) {
 	}
 }
 
-func (p *ConsumerPool) Stop() {
+func (p *consumerPool) Stop() {
 	p.stopSig <- true
 	<-p.flushed
 
 	var wg sync.WaitGroup
 	for _, c := range p.consumers {
 		wg.Add(1)
-		go func(c *Consumer) {
+		go func(c Consumer) {
 			defer wg.Done()
 			c.Stop()
 		}(c)

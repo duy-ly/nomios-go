@@ -16,7 +16,12 @@ source:
     addr: 127.0.0.1:3306
     user: user
     password: password
+    database: catalog_db
+    table_include_list:
     server_id: 100
+
+transform:
+  datetime_format: string
 
 publisher:
   kind: kafka

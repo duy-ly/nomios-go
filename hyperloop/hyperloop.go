@@ -10,7 +10,7 @@ import (
 type Hyperloop struct {
 	running bool
 
-	cp *consumerpool.ConsumerPool
+	cp consumerpool.ConsumerPool
 	sm state.StateManager
 	s  source.Source
 }
