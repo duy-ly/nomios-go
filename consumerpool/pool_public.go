@@ -14,8 +14,13 @@ const (
 	STOPPED
 )
 
-type Partitioner interface {
+type EventHelper interface {
 
-	// hash the event into an int32 value
+	// hashcode hashes the event into an int32 value
 	hashcode(event any) int32
+
+	// compare to event x, and y. If x is greater than y, return a positive value.
+	// If x and y are equal, return zero.
+	// other will return negative value
+	compare(x, y any) int
 }

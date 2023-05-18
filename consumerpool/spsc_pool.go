@@ -22,13 +22,13 @@ type PoolWithFunc struct {
 
 	workers []*spsc_worker
 
-	partitioner Partitioner
+	partitioner EventHelper
 
 	wg *sync.WaitGroup
 }
 
 func NewPoolWithFunc(workerSize int32, bufferSize int32, pf func([]interface{}),
-	partitioner Partitioner) *PoolWithFunc {
+	partitioner EventHelper) *PoolWithFunc {
 	if workerSize <= 0 {
 		workerSize = 1
 	}
@@ -66,6 +66,30 @@ func (pool *PoolWithFunc) Submit(event any) error {
 
 	hashcode := pool.partitioner.hashcode(event)
 	return pool.workers[hashcode%pool.size].Submit(event)
+}
+
+// lastEvent return the last committed event in all worker threads, it could be nil
+// when the pool is running, but doest not submitted any message
+func (pool *PoolWithFunc) lastEvent() any {
+	var last_event any = nil
+	for _, worker := range pool.workers {
+		event := worker.lastEvent
+		if event == nil {
+			continue
+		}
+
+		if last_event == nil {
+			last_event = event
+			continue
+		}
+
+		// we have two different event, just compare by the interface, then return the oldest
+		if pool.partitioner.compare(last_event, event) > 0 {
+			last_event = event
+		}
+
+	}
+	return last_event
 }
 
 func (pool *PoolWithFunc) Start() error {
