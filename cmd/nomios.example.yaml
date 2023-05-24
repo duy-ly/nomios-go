@@ -1,0 +1,31 @@
+consumer:
+  pool_stream_size: 20000
+  pool_size: 5
+  buffer_size: 1024
+  flush_tick: 100ms
+
+state:
+  checkpoint_cron: 100ms
+  kind: file
+  file:
+    path: ./checkpoint.nom
+
+source:
+  kind: mysql
+  mysql:
+    addr: 127.0.0.1:3306
+    user: user
+    password: password
+    database: catalog_db
+    table_include_list:
+    server_id: 100
+
+transform:
+  datetime_format: string
+
+publisher:
+  kind: kafka
+  kafka:
+    addrs: 
+      - 127.0.0.1:9092
+    topic: my-topic

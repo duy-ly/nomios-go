@@ -2,19 +2,17 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
-	"time"
 
-	"github.com/duy-ly/nomios-go/consumerpool"
 	"github.com/duy-ly/nomios-go/hyperloop"
-	"github.com/duy-ly/nomios-go/source"
+	"github.com/duy-ly/nomios-go/logger"
+	"github.com/spf13/viper"
 )
 
 var (
+	confFile     string
 	dbHost       string
 	dbPort       int
 	dbUser       string
@@ -26,6 +24,8 @@ var (
 )
 
 func init() {
+	flag.StringVar(&confFile, "conf-file", "", "")
+
 	flag.StringVar(&dbHost, "db-host", "mysql", "")
 	flag.IntVar(&dbPort, "db-port", 3306, "")
 	flag.StringVar(&dbUser, "db-user", "nomios", "")
@@ -38,37 +38,18 @@ func init() {
 }
 
 func main() {
-	cfg := hyperloop.HyperloopConfig{
-		SourceConfig: source.SourceConfig{
-			Host: dbHost,
-			Port: uint16(dbPort),
-			User: dbUser,
-			Pass: dbPass,
-
-			ServerID: 100,
-		},
-		PoolConfig: consumerpool.PoolConfig{
-			Count:      cpCount,
-			BufferSize: cpBufferSize,
-		},
-		EventStreamSize: streamSize,
+	err := loadConfig()
+	if err != nil {
+		logger.NomiosLog.Panic("Nomios cannot start due to unable to load config ", err)
 	}
 
-	if cpFlushTick != "" {
-		if tick, err := time.ParseDuration(cpFlushTick); err == nil {
-			cfg.PoolConfig.FlushTick = tick
-		} else if n, err := strconv.Atoi(cpFlushTick); err == nil {
-			cfg.PoolConfig.FlushTick = time.Duration(n) * time.Millisecond
-		}
-	}
+	h := hyperloop.NewHyperloop()
 
-	h := hyperloop.NewHyperloop(cfg)
-
-	fmt.Println("Nomios starting")
+	logger.NomiosLog.Debug("Nomios starting.")
 
 	h.Start()
 
-	fmt.Println("Nomios is started")
+	logger.NomiosLog.Debug("Nomios is started.")
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -77,11 +58,17 @@ func main() {
 	for {
 		select {
 		case <-c:
-			fmt.Println("Nomios start graceful terminate")
+			logger.NomiosLog.Debug("Nomios start graceful terminate.")
 			h.Stop()
-			fmt.Println("Nomios is graceful terminated")
+			logger.NomiosLog.Debug("Nomios is graceful terminated.")
 			return
 		default:
 		}
 	}
+}
+
+func loadConfig() error {
+	viper.SetConfigName("nomios")
+	viper.AddConfigPath(".")
+	return viper.ReadInConfig()
 }

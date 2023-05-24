@@ -2,81 +2,130 @@ package consumerpool
 
 import (
 	"sync"
-	"time"
 
-	"github.com/duy-ly/nomios-go/event"
+	"github.com/duy-ly/nomios-go/model"
 )
 
-type ConsumerPool struct {
+type ConsumerPool interface {
+	Start()
+	GetStream() chan []*model.NomiosEvent
+	GetLastGTID() string
+	Stop()
+}
+
+type consumerPool struct {
 	cfg     PoolConfig
 	stopSig chan bool
 	flushed chan bool
+	stream  chan []*model.NomiosEvent
 
-	consumers []*Consumer
+	consumers []Consumer
 }
 
 // NewConsumerPool -- create a pool of consumer
-func NewConsumerPool(cfg PoolConfig) *ConsumerPool {
-	if cfg.Count <= 0 {
-		cfg.Count = 1
-	}
-	if cfg.BufferSize <= 0 {
-		cfg.BufferSize = 100
-	}
-	if cfg.FlushTick <= 0 {
-		cfg.FlushTick = 100 * time.Millisecond
-	}
+func NewConsumerPool() (*consumerPool, error) {
+	cfg := loadConfig()
 
-	p := new(ConsumerPool)
+	p := new(consumerPool)
 	p.stopSig = make(chan bool, 1)
 	p.flushed = make(chan bool, 1)
+	p.stream = make(chan []*model.NomiosEvent, cfg.PoolStreamSize)
 
-	for i := 0; i < cfg.Count; i++ {
-		c := NewConsumer(i, cfg.BufferSize, cfg.FlushTick)
+	for i := 0; i < cfg.PoolSize; i++ {
+		c, err := NewConsumer(i, cfg.BufferSize, cfg.FlushTick)
+		if err != nil {
+			return nil, err
+		}
 
 		c.Start()
 
 		p.consumers = append(p.consumers, c)
 	}
 
-	return p
+	return p, nil
 }
 
 // Start -- start consumer pool, get partition using hash function to pick consumer then handle NomiosEvent
-func (p *ConsumerPool) Start(stream chan event.NomiosEvent) {
+func (p *consumerPool) Start() {
 	go func() {
 		for {
 			select {
 			case <-p.stopSig:
+				close(p.stream)
+
 				// ensure get all event from stream
-				for e := range stream {
+				for e := range p.stream {
 					p.partitionEvent(e)
 				}
 
 				p.flushed <- true
 				return
-			case e := <-stream:
+			case e := <-p.stream:
 				p.partitionEvent(e)
 			}
 		}
 	}()
 }
 
-func (p *ConsumerPool) partitionEvent(e event.NomiosEvent) {
-	// TODO: do partition
-	partitionIdx := 1
-
-	p.consumers[partitionIdx].Send(&e)
+func (p *consumerPool) GetStream() chan []*model.NomiosEvent {
+	return p.stream
 }
 
-func (p *ConsumerPool) Stop() {
+func (p *consumerPool) GetLastGTID() string {
+	var lastEvent *model.NomiosEvent
+
+	for _, c := range p.consumers {
+		e := c.GetLastProcessedEvent()
+		if e == nil {
+			continue
+		}
+
+		if lastEvent == nil {
+			lastEvent = e
+			continue
+		}
+
+		ePos := e.Metadata.GetPos()
+		lastPos := lastEvent.Metadata.GetPos()
+
+		if lastPos.Compare(ePos) == 1 {
+			lastEvent = e
+		}
+	}
+
+	if lastEvent == nil {
+		return ""
+	}
+
+	return lastEvent.Metadata.GetID()
+}
+
+func (p *consumerPool) partitionEvent(events []*model.NomiosEvent) {
+	mapPartitionEvents := make(map[int][]*model.NomiosEvent)
+
+	for _, e := range events {
+		partitionID := e.GetPartitionID(len(p.consumers))
+
+		if _, exist := mapPartitionEvents[partitionID]; !exist {
+			mapPartitionEvents[partitionID] = make([]*model.NomiosEvent, 0)
+		}
+
+		mapPartitionEvents[partitionID] = append(mapPartitionEvents[partitionID], e)
+	}
+
+	for partitionID, e := range mapPartitionEvents {
+		p.consumers[partitionID].Send(e)
+	}
+}
+
+func (p *consumerPool) Stop() {
 	p.stopSig <- true
 	<-p.flushed
 
 	var wg sync.WaitGroup
 	for _, c := range p.consumers {
 		wg.Add(1)
-		go func(c *Consumer) {
+		go func(c Consumer) {
 			defer wg.Done()
 			c.Stop()
 		}(c)

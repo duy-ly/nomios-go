@@ -22,3 +22,5 @@ go.work
 
 .vscode
 .DS_STORE
+checkpoint.nom
+nomios.yaml

@@ -2,59 +2,61 @@ package hyperloop
 
 import (
 	"github.com/duy-ly/nomios-go/consumerpool"
-	"github.com/duy-ly/nomios-go/event"
+	"github.com/duy-ly/nomios-go/logger"
 	"github.com/duy-ly/nomios-go/source"
+	"github.com/duy-ly/nomios-go/state"
 )
 
 type Hyperloop struct {
-	stream  chan event.NomiosEvent
-	cfg     HyperloopConfig
 	running bool
 
-	cp *consumerpool.ConsumerPool
-	s  *source.Source
+	cp consumerpool.ConsumerPool
+	sm state.StateManager
+	s  source.Source
 }
 
-func NewHyperloop(cfg HyperloopConfig) *Hyperloop {
-	if cfg.EventStreamSize == 0 {
-		cfg.EventStreamSize = 20000
+func NewHyperloop() *Hyperloop {
+	stt, err := state.NewState()
+	if err != nil {
+		logger.NomiosLog.Panic("Error when init state ", err)
+	}
+	cp, err := consumerpool.NewConsumerPool()
+	if err != nil {
+		logger.NomiosLog.Panic("Error when init consumer pool ", err)
+	}
+	sm := state.NewStateManager(stt, cp.GetLastGTID)
+	s, err := source.NewSource()
+	if err != nil {
+		logger.NomiosLog.Panic("Error when init source ", err)
 	}
 
 	h := new(Hyperloop)
-	h.cfg = cfg
-	h.stream = make(chan event.NomiosEvent, cfg.EventStreamSize)
-
-	h.cp = consumerpool.NewConsumerPool(cfg.PoolConfig)
-	s, err := source.NewSource(h.cfg.SourceConfig)
-	if err != nil {
-		panic(err)
-	}
+	h.cp = cp
+	h.sm = sm
 	h.s = s
 
 	return h
 }
 
 func (h *Hyperloop) Start() {
-	// TODO: schedule state manager
+	h.sm.Start()
 
-	h.cp.Start(h.stream)
+	h.cp.Start()
 
-	h.s.Start("", 0, h.stream)
+	h.s.Start(h.sm.GetLastCheckpoint(), h.cp.GetStream())
 
 	h.running = true
 }
 
 func (h *Hyperloop) Stop() {
-	// TODO: stop state manager
+	h.sm.Stop()
 
 	// stop source first to prevent push more event to stream
 	h.s.Stop()
 
-	close(h.stream)
-
 	h.cp.Stop()
 
-	// TODO: manual state checkpoint
+	h.sm.Checkpoint()
 }
 
 func (h *Hyperloop) IsRunning() bool {
